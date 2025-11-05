@@ -14,6 +14,11 @@ namespace RadBot.Bot
         private readonly InfrastructureService _infrastructureService = infrastructureService;
         private readonly BotState _botState = botState;
         private readonly DiscordSocketClient _client = client;
+        private readonly List<ulong> AdminRoles = [
+            776164397160726620, //Directors
+            1002727659505205319, //Turks
+            718919601768890419, //Leadership
+        ];
 
         public async Task RegisterCommandsAsync()
         {
@@ -43,10 +48,12 @@ namespace RadBot.Bot
 
         public async Task HandleSlashCommandAsync(SocketSlashCommand command)
         {
+            var user = command.User as SocketGuildUser;
             switch (command.Data.Name)
             {
                 case "start":
-                    await _roundService.StartNewRoundAsync(command);
+                    if (user!.Roles.Any(x => AdminRoles.Contains(x.Id)))
+                        await _roundService.StartNewRoundAsync(command);
                     break;
             }
         }
@@ -54,6 +61,7 @@ namespace RadBot.Bot
 
         public async Task HandleCommandAsync(SocketMessage message)
         {
+            var user = message.Author as SocketGuildUser;
             if (message.Author.IsBot) return;
 
             var content = message.CleanContent.ToLower();
@@ -70,7 +78,7 @@ namespace RadBot.Bot
             //Rolling
             else if (content == "!roll")
                 await _roundService.RollAsync(message);
-            else if (content == "!end")
+            else if (content == "!end" && user!.Roles.Any(x => AdminRoles.Contains(x.Id)))
                 await _roundService.EndRoundAsync();
         }
     }

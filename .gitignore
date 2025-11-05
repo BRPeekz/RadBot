@@ -1,0 +1,44 @@
+# =========================
+# Pastas de build do .NET
+# =========================
+bin/
+obj/
+publish/
+
+# =========================
+# Arquivos do Visual Studio / IDEs
+# =========================
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.idea/
+
+# =========================
+# Pacotes NuGet
+# =========================
+*.nupkg
+*.snupkg
+*.nuget/
+
+# =========================
+# Logs e arquivos temporários
+# =========================
+*.log
+*.pidb
+*.pdb
+*.mdb
+*.svclog
+
+# =========================
+# Sistema operacional
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Arquivos de configuração sensíveis
+# =========================
+appsettings.Development.json
+.env

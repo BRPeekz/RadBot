@@ -156,11 +156,23 @@ namespace RadBot.Services
                 return;
             }
 
+            TimeZoneInfo tz;
+            try
+            {
+                // Windows
+                tz = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
+            }
+            catch
+            {
+                // Linux (Discloud)
+                tz = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+            }
+
             var roll = new Roll()
             {
                 UserId = message.Author.Id,
                 Value = Rng.Next(0, 101),
-                Time = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "E. South America Standard Time")
+                Time = TimeZoneInfo.ConvertTime(DateTime.UtcNow, tz)
             };
 
             _roundState.Rolls.Add(roll);

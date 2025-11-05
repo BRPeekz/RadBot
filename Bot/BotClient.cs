@@ -3,6 +3,7 @@ using Discord.WebSocket;
 using Microsoft.Extensions.DependencyInjection;
 using RadBot.Data;
 using RadBot.Services;
+using DotNetEnv;
 
 namespace RadBot.Bot;
 
@@ -60,6 +61,7 @@ public class BotClient
         _client.MessageReceived += commandHandler.HandleCommandAsync; 
         _client.SlashCommandExecuted += commandHandler.HandleSlashCommandAsync;
 
+        Env.Load();
         string? token = Environment.GetEnvironmentVariable("DISCORD_BOT_TOKEN");
         if (string.IsNullOrWhiteSpace(token))
             throw new InvalidOperationException("DISCORD_BOT_TOKEN environment variable is not set.");
