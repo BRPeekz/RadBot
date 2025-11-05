@@ -9,9 +9,23 @@ namespace RadBot.Services
 
         public async Task SetChannelAsync(SocketMessage message)
         {
-            Storage.SaveInfrastructure(new Models.Infrastructure { BotChannelId = message.Channel.Id });
+            _botState.BotChannelIds.Add(message.Channel.Id);
+            Storage.SaveInfrastructure(new Models.Infrastructure { BotChannelId = _botState.BotChannelIds, BotInfoChannelId = _botState.BotInfoChannelId });
             await message.Channel.SendMessageAsync($"All set up and ready to go!");
-            _botState.BotChannelId = message.Channel.Id;
+        }
+
+        public async Task RemoveChannelAsync(SocketMessage message)
+        {
+            _botState.BotChannelIds.Remove(message.Channel.Id);
+            Storage.SaveInfrastructure(new Models.Infrastructure { BotChannelId = _botState.BotChannelIds, BotInfoChannelId = _botState.BotInfoChannelId });
+            await message.Channel.SendMessageAsync($"Oh, k then, bye!");
+        }
+
+        public async Task SetInfoChannelAsync(SocketMessage message)
+        {
+            _botState.BotInfoChannelId = message.Channel.Id;
+            Storage.SaveInfrastructure(new Models.Infrastructure { BotChannelId = _botState.BotChannelIds, BotInfoChannelId = _botState.BotInfoChannelId });
+            await message.Channel.SendMessageAsync($"All set up and ready to go!");
         }
     }
 }

@@ -15,9 +15,10 @@ namespace RadBot.Bot
         private readonly BotState _botState = botState;
         private readonly DiscordSocketClient _client = client;
         private readonly List<ulong> AdminRoles = [
-            776164397160726620, //Directors
+            776164397160726620,  //Directors
             1002727659505205319, //Turks
-            718919601768890419, //Leadership
+            718919601768890419,  //Leadership
+            1435693145588498603, //Testing Role
         ];
 
         public async Task RegisterCommandsAsync()
@@ -58,7 +59,6 @@ namespace RadBot.Bot
             }
         }
 
-
         public async Task HandleCommandAsync(SocketMessage message)
         {
             var user = message.Author as SocketGuildUser;
@@ -69,11 +69,15 @@ namespace RadBot.Bot
             if (content.StartsWith('/')) return;
 
             //Infrastructure
-            else if (content == "!setchannel")
+            else if (content == "!setchannel" && user!.Roles.Any(x => AdminRoles.Contains(x.Id)))
                 await _infrastructureService.SetChannelAsync(message);
+            else if (content == "!removechannel" && user!.Roles.Any(x => AdminRoles.Contains(x.Id)))
+                await _infrastructureService.RemoveChannelAsync(message);
+            else if (content == "!setinfochannel" && user!.Roles.Any(x => AdminRoles.Contains(x.Id)))
+                await _infrastructureService.SetInfoChannelAsync(message);
 
             //Checking Channel
-            else if (message.Channel.Id != _botState.BotChannelId) return;
+            else if (!_botState.BotChannelIds.Contains(message.Channel.Id)) return;
 
             //Rolling
             else if (content == "!roll")

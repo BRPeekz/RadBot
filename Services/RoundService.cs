@@ -100,7 +100,7 @@ namespace RadBot.Services
 
         public async Task EndRoundAsync()
         {
-            var channel = _botState.Client.GetChannel(_botState.BotChannelId) as IMessageChannel;
+            var channel = _botState.Client.GetChannel(_botState.BotChannelIds.FirstOrDefault()) as IMessageChannel;
 
             if (!_roundState.IsActive)
             {
@@ -112,6 +112,7 @@ namespace RadBot.Services
             {
                 await channel!.SendMessageAsync("No rolls were made this round. No winner!");
                 _roundState.IsActive = false;
+                _roundState.EndTimeUtc = null;
                 Storage.SaveRound(_roundState);
                 return;
             }
@@ -122,15 +123,15 @@ namespace RadBot.Services
             var tiedWinners = _roundState.Rolls.Where(x => x.Value == winner.Value).ToList();
             if (tiedWinners.Count > 1)
             {
-                var message = "Oh, we have a tie!\n" +
+                var msg = "Oh, we have a tie!\n" +
                     "The players:\n\n";
 
                 foreach (var tiedWinner in tiedWinners)
-                    message += $"<@{tiedWinner.UserId}>\n";
+                    msg += $"<@{tiedWinner.UserId}>\n";
 
-                message += $"\nHave tied with a {winner.Value} roll.";
+                msg += $"\nHave tied with a {winner.Value} roll.";
 
-                await channel!.SendMessageAsync(message);
+                await channel!.SendMessageAsync(msg);
             }
             else
             {

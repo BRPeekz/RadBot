@@ -26,10 +26,12 @@ public class BotClient
         _client = new DiscordSocketClient(config);
 
         services.AddSingleton(_client);
+        var infrastructure = Storage.LoadInfrastructure();
         services.AddSingleton(sp => new BotState
         {
             Client = _client,
-            BotChannelId = Storage.LoadInfrastructure().BotChannelId
+            BotChannelIds = infrastructure.BotChannelId,
+            BotInfoChannelId = infrastructure.BotInfoChannelId
         });
 
         services.AddSingleton<CommandsHandler>();
