@@ -163,7 +163,7 @@ namespace RadBot.Services
         {
             if (!_roundState.IsActive)
             {
-                await message.Channel.SendMessageAsync($"<@{message.Author.Id}> rolled 🎲 **{Rng.Next(0, 101)}**!\n(Out of a rolling period)");
+                await message.Channel.SendMessageAsync($"<@{message.Author.Id}> rolled 🎲 **{Rng.Next(1, 101)}**!\n(Out of a rolling period)");
                 return;
             }
 
@@ -188,7 +188,7 @@ namespace RadBot.Services
             var roll = new Roll()
             {
                 UserId = message.Author.Id,
-                Value = Rng.Next(0, 101),
+                Value = Rng.Next(1, 101),
                 Time = TimeZoneInfo.ConvertTime(DateTime.UtcNow, tz)
             };
 
