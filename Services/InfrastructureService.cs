@@ -7,18 +7,18 @@ namespace RadBot.Services
     {
         private readonly BotState _botState = botState;
 
-        public async Task SetChannelAsync(SocketMessage message)
+        public async Task SetChannelAsync(SocketSlashCommand command)
         {
-            _botState.BotChannelId = message.Channel.Id;
+            _botState.BotChannelId = command.Channel.Id;
             Storage.SaveInfrastructure(new Models.Infrastructure { BotChannelId = _botState.BotChannelId, BotInfoChannelId = _botState.BotInfoChannelId });
-            await message.Channel.SendMessageAsync($"All set up and ready to go!");
+            await command.RespondAsync($"All set up and ready to go!", ephemeral: true);
         }
 
-        public async Task SetInfoChannelAsync(SocketMessage message)
+        public async Task SetInfoChannelAsync(SocketSlashCommand command)
         {
-            _botState.BotInfoChannelId = message.Channel.Id;
+            _botState.BotInfoChannelId = command.Channel.Id;
             Storage.SaveInfrastructure(new Models.Infrastructure { BotChannelId = _botState.BotChannelId, BotInfoChannelId = _botState.BotInfoChannelId });
-            await message.Channel.SendMessageAsync($"All set up and ready to go!");
+            await command.RespondAsync($"All set up and ready to go!", ephemeral: true);
         }
     }
 }

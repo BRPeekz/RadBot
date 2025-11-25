@@ -25,7 +25,7 @@ namespace RadBot.Bot
         {
             var guild = _client.GetGuild(_botState.GuildId);
 
-            var command = new SlashCommandBuilder()
+            var startCmd = new SlashCommandBuilder()
             .WithName("start")
             .WithDescription("Start a lottery round.")
             .AddOption(
@@ -44,7 +44,17 @@ namespace RadBot.Bot
                     .WithType(ApplicationCommandOptionType.String)
             );
 
-            await guild.CreateApplicationCommandAsync(command.Build());
+            var setChannelCmd = new SlashCommandBuilder()
+                .WithName("setchannel")
+                .WithDescription("Sets the bot's main channel.");
+
+            var setInfoChannelCmd = new SlashCommandBuilder()
+                .WithName("setinfochannel")
+                .WithDescription("Sets the bot's info channel.");
+
+            await guild.CreateApplicationCommandAsync(startCmd.Build());
+            await guild.CreateApplicationCommandAsync(setChannelCmd.Build());
+            await guild.CreateApplicationCommandAsync(setInfoChannelCmd.Build());
         }
 
         public async Task HandleSlashCommandAsync(SocketSlashCommand command)
@@ -55,6 +65,22 @@ namespace RadBot.Bot
                 case "start":
                     if (user!.Roles.Any(x => AdminRoles.Contains(x.Id)))
                         await _roundService.StartNewRoundAsync(command);
+                    else
+                        await command.RespondAsync("You do not have permission to use this command.", ephemeral: true);
+                    break;
+
+                //Infrastructure
+                case "setchannel":
+                    if (user!.Roles.Any(x => AdminRoles.Contains(x.Id)))
+                        await _infrastructureService.SetChannelAsync(command);
+                    else
+                        await command.RespondAsync("You do not have permission to use this command.", ephemeral: true);
+                    break;
+                case "setinfochannel":
+                    if (user!.Roles.Any(x => AdminRoles.Contains(x.Id)))
+                        await _infrastructureService.SetInfoChannelAsync(command);
+                    else
+                        await command.RespondAsync("You do not have permission to use this command.", ephemeral: true);
                     break;
             }
         }
@@ -67,12 +93,6 @@ namespace RadBot.Bot
             var content = message.CleanContent.ToLower();
 
             if (content.StartsWith('/')) return;
-
-            //Infrastructure
-            else if (content == "!setchannel" && user!.Roles.Any(x => AdminRoles.Contains(x.Id)))
-                await _infrastructureService.SetChannelAsync(message);
-            else if (content == "!setinfochannel" && user!.Roles.Any(x => AdminRoles.Contains(x.Id)))
-                await _infrastructureService.SetInfoChannelAsync(message);
 
             //Checking Channel
             else if (_botState.BotChannelId != message.Channel.Id) return;
