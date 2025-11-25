@@ -108,7 +108,7 @@ namespace RadBot.Services
             _roundState.Rolls.Clear();
             Storage.SaveRound(_roundState);
 
-            await command.RespondAsync($"✅ Round started in mode **{mode}**.");
+            await command.RespondAsync($"✅ Round started in mode **{mode}**.", ephemeral: true);
         }
 
         public async Task EndRoundAsync()
