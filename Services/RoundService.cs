@@ -73,13 +73,11 @@ namespace RadBot.Services
                     tz = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
                 }
 
-                // Agora local da rodada (hoje na data deles)
                 var nowEst = TimeZoneInfo.ConvertTime(DateTime.UtcNow, tz);
                 var roundEndEst = nowEst.Date + endTimeEst;
 
-                // Se a hora já passou hoje → agendar para amanhã
-                if (roundEndEst <= nowEst)
-                    roundEndEst = roundEndEst.AddDays(1);
+                // Adiciona um dia
+                roundEndEst = roundEndEst.AddDays(1);
 
                 // Converter pra UTC para salvar
                 var endUtc = TimeZoneInfo.ConvertTimeToUtc(roundEndEst, tz);
@@ -90,8 +88,23 @@ namespace RadBot.Services
                 ScheduleEndRound(endUtc);
             }
 
-            _roundState.IsActive = true;
 
+            var channel = _botState.Client.GetChannel(_botState.BotChannelId) as IMessageChannel;
+            var infoChannel = _botState.Client.GetChannel(_botState.BotInfoChannelId) as IMessageChannel;
+
+            var embed = new EmbedBuilder()
+                .WithTitle("🎲 Round Started!")
+                .WithDescription("No rolls yet.")
+                .WithColor(Color.Blue)
+                .Build();
+
+            var msg = await channel!.SendMessageAsync(embed: embed);
+            var infoMsg = await infoChannel!.SendMessageAsync(embed: embed);
+
+            _roundState.SummaryMessageId = msg.Id;
+            _roundState.SummaryMessageInfoChannelId = infoMsg.Id;
+
+            _roundState.IsActive = true;
             _roundState.Rolls.Clear();
             Storage.SaveRound(_roundState);
 
@@ -100,7 +113,7 @@ namespace RadBot.Services
 
         public async Task EndRoundAsync()
         {
-            var channel = _botState.Client.GetChannel(_botState.BotChannelIds.FirstOrDefault()) as IMessageChannel;
+            var channel = _botState.Client.GetChannel(_botState.BotChannelId) as IMessageChannel;
 
             if (!_roundState.IsActive)
             {
@@ -138,8 +151,11 @@ namespace RadBot.Services
                 await channel!.SendMessageAsync($"🏆 Winner: <@{winner.UserId}> with a {winner.Value} roll!");
             }
 
+            await UpdateRoundSummaryAsync(true);
+
             _roundState.IsActive = false;
             _roundState.EndTimeUtc = null;
+            _roundState.SummaryMessageId = null;
             Storage.SaveRound(_roundState);
         }
 
@@ -165,7 +181,7 @@ namespace RadBot.Services
             }
             catch
             {
-                // Linux (Discloud)
+                // Linux
                 tz = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
             }
 
@@ -179,7 +195,51 @@ namespace RadBot.Services
             _roundState.Rolls.Add(roll);
             Storage.SaveRound(_roundState);
 
+            await UpdateRoundSummaryAsync(false);
+
             await message.Channel.SendMessageAsync($"<@{message.Author.Id}> rolled 🎲 **{roll.Value}**!");
         }
+
+        private async Task UpdateRoundSummaryAsync(bool isEndOfTheRound)
+        {
+            if (_botState.Client.GetChannel(_botState.BotChannelId) is not IMessageChannel channel ||
+                _botState.Client.GetChannel(_botState.BotInfoChannelId) is not IMessageChannel infoChannel)
+                return;
+
+            if (_roundState.SummaryMessageId is null || _roundState.SummaryMessageInfoChannelId is null)
+                return;
+
+            if (await channel.GetMessageAsync(_roundState.SummaryMessageId.Value) is not IUserMessage msg)
+                return;
+
+            if (await infoChannel.GetMessageAsync(_roundState.SummaryMessageInfoChannelId.Value) is not IUserMessage infoMsg)
+                return;
+
+            // Ordenar do maior pro menor
+            var ordered = _roundState.Rolls
+                .OrderByDescending(r => r.Value)
+                .ToList();
+
+            // Criar texto
+            var text = string.Join("\n", ordered.Select(r => $"<@{r.UserId}> — **{r.Value}**"));
+            var title = "🎲 Current Round";
+            var color = Color.Gold;
+
+            if (isEndOfTheRound)
+            {
+                title = "🏁 Round Ended!";
+                color = Color.DarkGrey;
+            }
+
+            var embed = new EmbedBuilder()
+                    .WithTitle(title)
+                    .WithDescription(text)
+                    .WithColor(color)
+                    .Build();
+
+            await msg.ModifyAsync(m => m.Embed = embed);
+            await infoMsg.ModifyAsync(m => m.Embed = embed);
+        }
+
     }
 }

@@ -18,7 +18,7 @@ namespace RadBot.Bot
             776164397160726620,  //Directors
             1002727659505205319, //Turks
             718919601768890419,  //Leadership
-            1435693145588498603, //Testing Role
+            1243287909650399404, //Testing Role
         ];
 
         public async Task RegisterCommandsAsync()
@@ -42,7 +42,7 @@ namespace RadBot.Bot
                     .WithDescription("When the round should end (HH:mm EST).")
                     .WithRequired(false)
                     .WithType(ApplicationCommandOptionType.String)
-            ); ;
+            );
 
             await guild.CreateApplicationCommandAsync(command.Build());
         }
@@ -71,13 +71,11 @@ namespace RadBot.Bot
             //Infrastructure
             else if (content == "!setchannel" && user!.Roles.Any(x => AdminRoles.Contains(x.Id)))
                 await _infrastructureService.SetChannelAsync(message);
-            else if (content == "!removechannel" && user!.Roles.Any(x => AdminRoles.Contains(x.Id)))
-                await _infrastructureService.RemoveChannelAsync(message);
             else if (content == "!setinfochannel" && user!.Roles.Any(x => AdminRoles.Contains(x.Id)))
                 await _infrastructureService.SetInfoChannelAsync(message);
 
             //Checking Channel
-            else if (!_botState.BotChannelIds.Contains(message.Channel.Id)) return;
+            else if (_botState.BotChannelId != message.Channel.Id) return;
 
             //Rolling
             else if (content == "!roll")

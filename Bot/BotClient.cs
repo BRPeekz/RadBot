@@ -30,7 +30,7 @@ public class BotClient
         services.AddSingleton(sp => new BotState
         {
             Client = _client,
-            BotChannelIds = infrastructure.BotChannelId,
+            BotChannelId = infrastructure.BotChannelId,
             BotInfoChannelId = infrastructure.BotInfoChannelId
         });
 
@@ -63,7 +63,9 @@ public class BotClient
         _client.MessageReceived += commandHandler.HandleCommandAsync; 
         _client.SlashCommandExecuted += commandHandler.HandleSlashCommandAsync;
 
-        Env.Load();
+        var envPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".env");
+        Env.Load(envPath);
+
         string? token = Environment.GetEnvironmentVariable("DISCORD_BOT_TOKEN");
         if (string.IsNullOrWhiteSpace(token))
             throw new InvalidOperationException("DISCORD_BOT_TOKEN environment variable is not set.");

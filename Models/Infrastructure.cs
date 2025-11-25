@@ -2,7 +2,7 @@
 {
     public class Infrastructure
     {
-        public List<ulong> BotChannelId { get; set; } = [];
+        public ulong BotChannelId { get; set; } = 0;
         public ulong BotInfoChannelId { get; set; } = 0;
     }
 }
