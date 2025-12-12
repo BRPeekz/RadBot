@@ -18,7 +18,7 @@ namespace RadBot.Bot
             776164397160726620,  //Directors
             1002727659505205319, //Turks
             718919601768890419,  //Leadership
-            1243287909650399404, //Testing Role
+            1435693145588498603, //Testing Role
         ];
 
         public async Task RegisterCommandsAsync()
@@ -35,14 +35,19 @@ namespace RadBot.Bot
                     .WithRequired(true)
                     .WithType(ApplicationCommandOptionType.String)
                     .AddChoice("Automatic", "auto")
-                    .AddChoice("Manual", "manual")
-            ).AddOption(
+                    .AddChoice("Manual", "manual"))
+            .AddOption(
+                new SlashCommandOptionBuilder()
+                    .WithName("auto_sum_damage")
+                    .WithDescription("Should the damage be sum?")
+                    .WithRequired(true)
+                    .WithType(ApplicationCommandOptionType.Boolean))
+            .AddOption(
                 new SlashCommandOptionBuilder()
                     .WithName("end_time")
                     .WithDescription("When the round should end (HH:mm EST).")
                     .WithRequired(false)
-                    .WithType(ApplicationCommandOptionType.String)
-            );
+                    .WithType(ApplicationCommandOptionType.String));
 
             var setChannelCmd = new SlashCommandBuilder()
                 .WithName("setchannel")

@@ -104,6 +104,10 @@ namespace RadBot.Services
             _roundState.SummaryMessageId = msg.Id;
             _roundState.SummaryMessageInfoChannelId = infoMsg.Id;
 
+
+            var sumDamage = (bool)command.Data.Options.First(x => x.Name == "auto_sum_damage").Value;
+            _roundState.IsSummingDamage = sumDamage;
+
             _roundState.IsActive = true;
             _roundState.Rolls.Clear();
             Storage.SaveRound(_roundState);
@@ -132,6 +136,8 @@ namespace RadBot.Services
 
             var winner = _roundState.Rolls.OrderByDescending(r => r.Value).First();
 
+            await UpdateRoundSummaryAsync(true);
+
             //check for ties
             var tiedWinners = _roundState.Rolls.Where(x => x.Value == winner.Value).ToList();
             if (tiedWinners.Count > 1)
@@ -151,11 +157,11 @@ namespace RadBot.Services
                 await channel!.SendMessageAsync($"🏆 Winner: <@{winner.UserId}> with a {winner.Value} roll!");
             }
 
-            await UpdateRoundSummaryAsync(true);
-
             _roundState.IsActive = false;
+            _roundState.IsSummingDamage = false;
             _roundState.EndTimeUtc = null;
             _roundState.SummaryMessageId = null;
+            _roundState.SummaryMessageInfoChannelId = null;
             Storage.SaveRound(_roundState);
         }
 
@@ -221,24 +227,45 @@ namespace RadBot.Services
                 .ToList();
 
             // Criar texto
-            var text = string.Join("\n", ordered.Select(r => $"<@{r.UserId}> — **{r.Value}**"));
             var title = "🎲 Current Round";
             var color = Color.Gold;
+            var text = string.Join("\n", ordered.Select(r => $"<@{r.UserId}> — **{r.Value}**"));
 
+            if (_roundState.IsSummingDamage)
+            {
+                var totalDamage = _roundState.Rolls.Sum(r => r.Value);
+                text += $"\n\n💥 **Total Damage:** {totalDamage}";
+            };
+
+            // Se for o fim da rodada
             if (isEndOfTheRound)
             {
                 title = "🏁 Round Ended!";
                 color = Color.DarkGrey;
-            }
 
-            var embed = new EmbedBuilder()
+                var embed = new EmbedBuilder()
                     .WithTitle(title)
                     .WithDescription(text)
                     .WithColor(color)
                     .Build();
 
-            await msg.ModifyAsync(m => m.Embed = embed);
-            await infoMsg.ModifyAsync(m => m.Embed = embed);
+                await channel.SendMessageAsync(embed: embed);
+                await msg.DeleteAsync();
+                await infoMsg.ModifyAsync(m => m.Embed = embed);
+            }
+            // Se não for o fim da rodada
+            else
+            {
+                var embed = new EmbedBuilder()
+                    .WithTitle(title)
+                    .WithDescription(text)
+                    .WithColor(color)
+                    .Build();
+
+                // Atualizar mensagens
+                await msg.ModifyAsync(m => m.Embed = embed);
+                await infoMsg.ModifyAsync(m => m.Embed = embed);
+            }
         }
 
     }
