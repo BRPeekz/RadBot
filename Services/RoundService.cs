@@ -2,6 +2,7 @@
 using Discord.WebSocket;
 using RadBot.Data;
 using RadBot.Models;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace RadBot.Services
 {
@@ -106,7 +107,9 @@ namespace RadBot.Services
 
 
             var sumDamage = (bool)command.Data.Options.First(x => x.Name == "auto_sum_damage").Value;
+            var declareWinner = (bool)command.Data.Options.First(x => x.Name == "declare_winner").Value;
             _roundState.IsSummingDamage = sumDamage;
+            _roundState.IsDeclaringWinner = declareWinner;
 
             _roundState.IsActive = true;
             _roundState.Rolls.Clear();
@@ -125,40 +128,44 @@ namespace RadBot.Services
                 return;
             }
 
-            if (_roundState.Rolls.Count == 0)
-            {
-                await channel!.SendMessageAsync("No rolls were made this round. No winner!");
-                _roundState.IsActive = false;
-                _roundState.EndTimeUtc = null;
-                Storage.SaveRound(_roundState);
-                return;
-            }
-
-            var winner = _roundState.Rolls.OrderByDescending(r => r.Value).First();
-
             await UpdateRoundSummaryAsync(true);
 
-            //check for ties
-            var tiedWinners = _roundState.Rolls.Where(x => x.Value == winner.Value).ToList();
-            if (tiedWinners.Count > 1)
+            if (_roundState.IsDeclaringWinner)
             {
-                var msg = "Oh, we have a tie!\n" +
-                    "The players:\n\n";
+                if (_roundState.Rolls.Count == 0)
+                {
+                    await channel!.SendMessageAsync("No rolls were made this round. No winner!");
+                    _roundState.IsActive = false;
+                    _roundState.EndTimeUtc = null;
+                    Storage.SaveRound(_roundState);
+                    return;
+                }
 
-                foreach (var tiedWinner in tiedWinners)
-                    msg += $"<@{tiedWinner.UserId}>\n";
+                var winner = _roundState.Rolls.OrderByDescending(r => r.Value).First();
 
-                msg += $"\nHave tied with a {winner.Value} roll.";
+                //check for ties
+                var tiedWinners = _roundState.Rolls.Where(x => x.Value == winner.Value).ToList();
+                if (tiedWinners.Count > 1)
+                {
+                    var msg = "Oh, we have a tie!\n" +
+                        "The players:\n\n";
 
-                await channel!.SendMessageAsync(msg);
-            }
-            else
-            {
-                await channel!.SendMessageAsync($"🏆 Winner: <@{winner.UserId}> with a {winner.Value} roll!");
+                    foreach (var tiedWinner in tiedWinners)
+                        msg += $"<@{tiedWinner.UserId}>\n";
+
+                    msg += $"\nHave tied with a {winner.Value} roll.";
+
+                    await channel!.SendMessageAsync(msg);
+                }
+                else
+                {
+                    await channel!.SendMessageAsync($"🏆 Winner: <@{winner.UserId}> with a {winner.Value} roll!");
+                }
             }
 
             _roundState.IsActive = false;
             _roundState.IsSummingDamage = false;
+            _roundState.IsDeclaringWinner = false;
             _roundState.EndTimeUtc = null;
             _roundState.SummaryMessageId = null;
             _roundState.SummaryMessageInfoChannelId = null;

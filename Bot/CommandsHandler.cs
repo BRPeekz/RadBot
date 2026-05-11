@@ -38,6 +38,12 @@ namespace RadBot.Bot
                     .AddChoice("Manual", "manual"))
             .AddOption(
                 new SlashCommandOptionBuilder()
+                    .WithName("declare_winner")
+                    .WithDescription("Should the winner be declared?")
+                    .WithRequired(true)
+                    .WithType(ApplicationCommandOptionType.Boolean))
+            .AddOption(
+                new SlashCommandOptionBuilder()
                     .WithName("auto_sum_damage")
                     .WithDescription("Should the damage be sum?")
                     .WithRequired(true)
