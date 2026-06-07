@@ -33,4 +33,16 @@ public class Storage
         var json = File.ReadAllText(RoundFileName);
         return JsonSerializer.Deserialize<RoundState>(json) ?? new RoundState();
     }
+
+    /// <summary>
+    /// Deletes the round.json file and returns a fresh RoundState.
+    /// Prevents deserialization conflicts when the schema changes between modes.
+    /// </summary>
+    public static RoundState ResetRound()
+    {
+        if (File.Exists(RoundFileName))
+            File.Delete(RoundFileName);
+
+        return new RoundState();
+    }
 }

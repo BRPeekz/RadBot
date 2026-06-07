@@ -18,7 +18,8 @@ public class BotClient
         {
             GatewayIntents = GatewayIntents.Guilds |
                              GatewayIntents.GuildMessages |
-                             GatewayIntents.MessageContent
+                             GatewayIntents.MessageContent |
+                             GatewayIntents.GuildMembers
         };
 
         var services = new ServiceCollection();
@@ -35,8 +36,9 @@ public class BotClient
         });
 
         services.AddSingleton<CommandsHandler>();
-        services.AddSingleton<RoundService>();
+        services.AddSingleton<LotteryService>();
         services.AddSingleton<InfrastructureService>();
+        services.AddSingleton<VerificationService>();
 
         _services = services.BuildServiceProvider();
     }
@@ -60,8 +62,14 @@ public class BotClient
                 commandsRegistered = true;
             }
         };
-        _client.MessageReceived += commandHandler.HandleCommandAsync; 
+        _client.MessageReceived += commandHandler.HandleCommandAsync;
         _client.SlashCommandExecuted += commandHandler.HandleSlashCommandAsync;
+        _client.GuildMemberUpdated += async (before, after) =>
+        {
+            var beforeUser = await before.GetOrDownloadAsync();
+            if (beforeUser != null)
+                await commandHandler.HandleMemberUpdatedAsync(beforeUser, after);
+        };
 
         var envPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".env");
         Env.Load(envPath);
@@ -77,8 +85,8 @@ public class BotClient
 
         if (state.IsActive && state.EndTimeUtc is not null)
         {
-            var roundService = _services.GetRequiredService<RoundService>();
-            roundService.ScheduleEndRound(state.EndTimeUtc);
+            var lotteryService = _services.GetRequiredService<LotteryService>();
+            lotteryService.ScheduleEndRound(state.EndTimeUtc);
         }
 
         await Task.Delay(-1);

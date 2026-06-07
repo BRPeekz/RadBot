@@ -1,25 +1,22 @@
 ﻿using Discord;
 using Discord.WebSocket;
+using RadBot.Constants;
 using RadBot.Services;
 
 namespace RadBot.Bot
 {
     public class CommandsHandler(
-        RoundService roundService,
+        LotteryService lotteryService,
         InfrastructureService infrastructureService,
+        VerificationService verificationService,
         BotState botState,
         DiscordSocketClient client)
     {
-        private readonly RoundService _roundService = roundService;
+        private readonly LotteryService _lotteryService = lotteryService;
         private readonly InfrastructureService _infrastructureService = infrastructureService;
+        private readonly VerificationService _verificationService = verificationService;
         private readonly BotState _botState = botState;
         private readonly DiscordSocketClient _client = client;
-        private readonly List<ulong> AdminRoles = [
-            776164397160726620,  //Directors
-            1002727659505205319, //Turks
-            718919601768890419,  //Leadership
-            1435693145588498603, //Testing Role
-        ];
 
         public async Task RegisterCommandsAsync()
         {
@@ -30,30 +27,38 @@ namespace RadBot.Bot
             .WithDescription("Start a lottery round.")
             .AddOption(
                 new SlashCommandOptionBuilder()
-                    .WithName("mode")
-                    .WithDescription("Choose how the round resets.")
+                    .WithName("lottery_mode")
+                    .WithDescription("Choose the lottery mode.")
+                    .WithRequired(true)
+                    .WithType(ApplicationCommandOptionType.String)
+                    .AddChoice("Standard", "Standard")
+                    .AddChoice("Boss Raid", "BossRaid"))
+            .AddOption(
+                new SlashCommandOptionBuilder()
+                    .WithName("timing")
+                    .WithDescription("Choose how the round ends.")
                     .WithRequired(true)
                     .WithType(ApplicationCommandOptionType.String)
                     .AddChoice("Automatic", "auto")
                     .AddChoice("Manual", "manual"))
             .AddOption(
                 new SlashCommandOptionBuilder()
-                    .WithName("declare_winner")
-                    .WithDescription("Should the winner be declared?")
-                    .WithRequired(true)
-                    .WithType(ApplicationCommandOptionType.Boolean))
-            .AddOption(
-                new SlashCommandOptionBuilder()
-                    .WithName("auto_sum_damage")
-                    .WithDescription("Should the damage be sum?")
-                    .WithRequired(true)
-                    .WithType(ApplicationCommandOptionType.Boolean))
-            .AddOption(
-                new SlashCommandOptionBuilder()
                     .WithName("end_time")
-                    .WithDescription("When the round should end (HH:mm EST).")
+                    .WithDescription("When the round should end (HH:mm EST). Required for Automatic timing.")
                     .WithRequired(false)
-                    .WithType(ApplicationCommandOptionType.String));
+                    .WithType(ApplicationCommandOptionType.String))
+            .AddOption(
+                new SlashCommandOptionBuilder()
+                    .WithName("roll_min")
+                    .WithDescription("Minimum roll value (Boss Raid only, default: 1).")
+                    .WithRequired(false)
+                    .WithType(ApplicationCommandOptionType.Integer))
+            .AddOption(
+                new SlashCommandOptionBuilder()
+                    .WithName("roll_max")
+                    .WithDescription("Maximum roll value (Boss Raid only, default: 100).")
+                    .WithRequired(false)
+                    .WithType(ApplicationCommandOptionType.Integer));
 
             var setChannelCmd = new SlashCommandBuilder()
                 .WithName("setchannel")
@@ -71,48 +76,51 @@ namespace RadBot.Bot
         public async Task HandleSlashCommandAsync(SocketSlashCommand command)
         {
             var user = command.User as SocketGuildUser;
+            if (!IsAdmin(user))
+            {
+                await command.RespondAsync("You do not have permission to use this command.", ephemeral: true);
+                return;
+            }
+
             switch (command.Data.Name)
             {
                 case "start":
-                    if (user!.Roles.Any(x => AdminRoles.Contains(x.Id)))
-                        await _roundService.StartNewRoundAsync(command);
-                    else
-                        await command.RespondAsync("You do not have permission to use this command.", ephemeral: true);
+                    await _lotteryService.StartNewRoundAsync(command);
                     break;
-
-                //Infrastructure
                 case "setchannel":
-                    if (user!.Roles.Any(x => AdminRoles.Contains(x.Id)))
-                        await _infrastructureService.SetChannelAsync(command);
-                    else
-                        await command.RespondAsync("You do not have permission to use this command.", ephemeral: true);
+                    await _infrastructureService.SetChannelAsync(command);
                     break;
                 case "setinfochannel":
-                    if (user!.Roles.Any(x => AdminRoles.Contains(x.Id)))
-                        await _infrastructureService.SetInfoChannelAsync(command);
-                    else
-                        await command.RespondAsync("You do not have permission to use this command.", ephemeral: true);
+                    await _infrastructureService.SetInfoChannelAsync(command);
                     break;
             }
         }
 
         public async Task HandleCommandAsync(SocketMessage message)
         {
-            var user = message.Author as SocketGuildUser;
             if (message.Author.IsBot) return;
 
-            var content = message.CleanContent.ToLower();
+            var content = message.CleanContent.ToLower().Trim();
+
+            // Verification tracking — always check regardless of channel
+            if (content.StartsWith("!iam"))
+                _verificationService.TrackVerificationAttempt(message);
 
             if (content.StartsWith('/')) return;
+            if (_botState.BotChannelId != message.Channel.Id) return;
 
-            //Checking Channel
-            else if (_botState.BotChannelId != message.Channel.Id) return;
-
-            //Rolling
-            else if (content == "!roll")
-                await _roundService.RollAsync(message);
-            else if (content == "!end" && user!.Roles.Any(x => AdminRoles.Contains(x.Id)))
-                await _roundService.EndRoundAsync();
+            if (LotteryService.TryParseRollCommand(content, out int min, out int max))
+                await _lotteryService.RollAsync(message, min, max);
+            else if (content == "!end" && IsAdmin(message.Author as SocketGuildUser))
+                await _lotteryService.EndRoundAsync();
         }
+
+        public async Task HandleMemberUpdatedAsync(SocketGuildUser before, SocketGuildUser after)
+        {
+            await _verificationService.HandleMemberUpdatedAsync(before, after);
+        }
+
+        private static bool IsAdmin(SocketGuildUser? user)
+            => user?.Roles.Any(r => DiscordIds.AdminRoleIds.Contains(r.Id)) ?? false;
     }
 }
