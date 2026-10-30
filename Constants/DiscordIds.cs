@@ -2,8 +2,8 @@ namespace RadBot.Constants;
 
 public static class DiscordIds
 {
-    //public const ulong GuildId = 713788214284124160;
-    public const ulong GuildId = 1243287909650399404; // Testing Guild
+    public const ulong GuildId = 713788214284124160;
+    //public const ulong GuildId = 1243287909650399404; // Testing Guild
 
     public static readonly ulong[] AdminRoleIds =
     [
