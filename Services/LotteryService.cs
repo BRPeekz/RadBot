@@ -3,11 +3,10 @@ using Discord.WebSocket;
 using RadBot.Data;
 using RadBot.Lottery;
 using RadBot.Models;
-using System.Text.RegularExpressions;
 
 namespace RadBot.Services;
 
-public partial class LotteryService(BotState state)
+public class LotteryService(BotState state)
 {
     private readonly BotState _botState = state;
     private RoundState _roundState = Storage.LoadRound();
@@ -16,42 +15,19 @@ public partial class LotteryService(BotState state)
     private ILotteryMode? _mode;
     private static readonly Random CasualRng = new();
 
-    [GeneratedRegex(@"^!roll\s*$")]
-    private static partial Regex PlainRollRegex();
-
-    [GeneratedRegex(@"^!roll\s+(\d+)\s*$")]
-    private static partial Regex SingleMaxRollRegex();
-
-    [GeneratedRegex(@"^!roll\s*(\d+)\s*-\s*(\d+)\s*$")]
-    private static partial Regex RangeRollRegex();
-
     /// <summary>
-    /// Tries to parse a roll command. Returns true if the message is a !roll variant.
+    /// Validates optional slash-command bounds and supplies the existing casual defaults.
     /// </summary>
-    public static bool TryParseRollCommand(string content, out int min, out int max)
+    public static bool TryGetRollRange(long? minimum, long? maximum, out int min, out int max)
     {
         min = 1;
         max = 100;
-
-        if (PlainRollRegex().IsMatch(content))
-            return true;
-
-        var rangeMatch = RangeRollRegex().Match(content);
-        if (rangeMatch.Success)
-        {
-            min = int.Parse(rangeMatch.Groups[1].Value);
-            max = int.Parse(rangeMatch.Groups[2].Value);
-            return true;
-        }
-
-        var singleMatch = SingleMaxRollRegex().Match(content);
-        if (singleMatch.Success)
-        {
-            max = int.Parse(singleMatch.Groups[1].Value);
-            return true;
-        }
-
-        return false;
+        var lower = minimum ?? 1;
+        var upper = maximum ?? 100;
+        if (lower < 1 || upper < lower || upper >= int.MaxValue) return false;
+        min = (int)lower;
+        max = (int)upper;
+        return true;
     }
 
     private static ILotteryMode ResolveMode(RoundState roundState)
@@ -161,14 +137,14 @@ public partial class LotteryService(BotState state)
         await command.RespondAsync($"✅ Round started — **{_mode.ModeName}** mode, timing: **{timing}**.", ephemeral: true);
     }
 
-    public async Task EndRoundAsync()
+    /// <summary>Ends the current legacy round, returning false without publishing when none is active.</summary>
+    public async Task<bool> EndRoundAsync()
     {
         var channel = _botState.Client.GetChannel(_botState.BotChannelId) as IMessageChannel;
 
         if (!_roundState.IsActive)
         {
-            await channel!.SendMessageAsync("Uhh, nothing to end here.");
-            return;
+            return false;
         }
 
         _mode ??= ResolveMode(_roundState);
@@ -210,40 +186,39 @@ public partial class LotteryService(BotState state)
         _roundState.SummaryMessageInfoChannelId = null;
         _mode = null;
         Storage.SaveRound(_roundState);
+        return true;
     }
 
-    public async Task RollAsync(SocketMessage message, int casualMin, int casualMax)
+    /// <summary>Processes a deferred slash roll using the existing casual, Standard or BossRaid rules.</summary>
+    public async Task RollAsync(SocketSlashCommand command, int casualMin, int casualMax)
     {
+        if (!TryGetRollRange(casualMin, casualMax, out _, out _))
+        {
+            await command.FollowupAsync("Invalid range. Use positive min/max values with min no greater than max.", ephemeral: true);
+            return;
+        }
         if (!_roundState.IsActive)
         {
             // Custom range only allowed outside a rolling period
             var casualRoll = CasualRng.Next(casualMin, casualMax + 1);
-            var rangeLabel = casualMin == 1 ? $"{casualMax}" : $"{casualMin}–{casualMax}";
-            await message.Channel.SendMessageAsync(
-                $"<@{message.Author.Id}> rolled 🎲 **{casualRoll}** (1–{rangeLabel})!\n(Out of a rolling period)");
+            await command.Channel.SendMessageAsync(
+                $"<@{command.User.Id}> rolled 🎲 **{casualRoll}** ({casualMin}–{casualMax})!\n(Out of a rolling period)");
+            await command.FollowupAsync("Roll recorded.", ephemeral: true);
             return;
         }
 
         // During an active round, custom ranges are not allowed
         if (casualMin != 1 || casualMax != 100)
         {
-            await message.DeleteAsync();
-            // Send an ephemeral-like message that auto-deletes
-            var warning = await message.Channel.SendMessageAsync(
-                $"<@{message.Author.Id}> Custom roll ranges are not allowed during an active rolling period. Use `!roll` only.");
-            _ = Task.Run(async () =>
-            {
-                await Task.Delay(TimeSpan.FromSeconds(8));
-                try { await warning.DeleteAsync(); } catch { }
-            });
+            await command.FollowupAsync("Custom roll ranges are not allowed during an active rolling period. Use /roll without a custom range.", ephemeral: true);
             return;
         }
 
         _mode ??= ResolveMode(_roundState);
 
-        if (!_mode.CanUserRoll(message.Author.Id, _roundState.Rolls))
+        if (!_mode.CanUserRoll(command.User.Id, _roundState.Rolls))
         {
-            await message.Channel.SendMessageAsync("Can't roll twice! Wait for your next chance");
+            await command.FollowupAsync("Can't roll twice! Wait for your next chance", ephemeral: true);
             return;
         }
 
@@ -251,7 +226,7 @@ public partial class LotteryService(BotState state)
 
         var roll = new Roll
         {
-            UserId = message.Author.Id,
+            UserId = command.User.Id,
             Value = _mode.GenerateRoll(),
             Time = TimeZoneInfo.ConvertTime(DateTime.UtcNow, tz)
         };
@@ -260,7 +235,8 @@ public partial class LotteryService(BotState state)
         Storage.SaveRound(_roundState);
 
         await UpdateRoundSummaryAsync(isEndOfTheRound: false);
-        await message.Channel.SendMessageAsync($"<@{message.Author.Id}> rolled 🎲 **{roll.Value}**!");
+        await command.Channel.SendMessageAsync($"<@{command.User.Id}> rolled 🎲 **{roll.Value}**!");
+        await command.FollowupAsync("Roll recorded.", ephemeral: true);
     }
 
     private async Task UpdateRoundSummaryAsync(bool isEndOfTheRound)

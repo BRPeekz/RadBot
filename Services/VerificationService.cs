@@ -8,7 +8,7 @@ public class VerificationService(BotState botState)
 {
     private readonly BotState _botState = botState;
 
-    // Tracks users who sent !iam — stores userId -> original nickname at message time
+    // Tracks verification requests — stores userId -> original nickname at request time
     private readonly ConcurrentDictionary<ulong, PendingVerification> _pending = new();
 
     private static readonly TimeSpan VerificationTimeout = TimeSpan.FromMinutes(2);
@@ -21,10 +21,7 @@ public class VerificationService(BotState botState)
     {
         if (message.Channel.Id != DiscordIds.VerificationChannelId) return;
         if (message.Author.IsBot) return;
-
-        var content = message.Content.Trim();
-        if (!content.StartsWith("!iam ", StringComparison.OrdinalIgnoreCase)) return;
-
+        if (!message.Content.Trim().StartsWith("!iam ", StringComparison.OrdinalIgnoreCase)) return;
         var guildUser = message.Author as SocketGuildUser;
         if (guildUser == null) return;
 
@@ -58,7 +55,7 @@ public class VerificationService(BotState botState)
         // Nickname hasn't changed — nothing to do yet
         if (oldNick == newNick) return;
 
-        // Nickname changed and it was different from what it was when they sent !iam
+        // Nickname changed and it was different from the one recorded at the request
         if (newNick != pending.OriginalNickname)
         {
             _pending.TryRemove(after.Id, out _);

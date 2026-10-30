@@ -42,3 +42,8 @@ Thumbs.db
 # =========================
 appsettings.Development.json
 .env
+
+# Bingo runtime state and optional repository-local durable directory
+/.radbot-data/
+bingo-event.json*
+bingo-*.json

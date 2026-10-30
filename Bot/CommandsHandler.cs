@@ -1,7 +1,7 @@
 ﻿using Discord;
 using Discord.WebSocket;
-using RadBot.Constants;
 using RadBot.Services;
+using RadBot.Bingo;
 
 namespace RadBot.Bot
 {
@@ -10,7 +10,11 @@ namespace RadBot.Bot
         InfrastructureService infrastructureService,
         VerificationService verificationService,
         BotState botState,
-        DiscordSocketClient client)
+        DiscordSocketClient client,
+        BingoInteractionHandler bingoHandler,
+        BingoService bingoService,
+        LotteryActivityGate activityGate,
+        RollInteractionHandler rollHandler)
     {
         private readonly LotteryService _lotteryService = lotteryService;
         private readonly InfrastructureService _infrastructureService = infrastructureService;
@@ -24,6 +28,7 @@ namespace RadBot.Bot
 
             var startCmd = new SlashCommandBuilder()
             .WithName("start")
+            .WithDefaultMemberPermissions((GuildPermission)0)
             .WithDescription("Start a lottery round.")
             .AddOption(
                 new SlashCommandOptionBuilder()
@@ -62,19 +67,47 @@ namespace RadBot.Bot
 
             var setChannelCmd = new SlashCommandBuilder()
                 .WithName("setchannel")
+                .WithDefaultMemberPermissions((GuildPermission)0)
                 .WithDescription("Sets the bot's main channel.");
 
             var setInfoChannelCmd = new SlashCommandBuilder()
                 .WithName("setinfochannel")
+                .WithDefaultMemberPermissions((GuildPermission)0)
                 .WithDescription("Sets the bot's info channel.");
 
             await guild.CreateApplicationCommandAsync(startCmd.Build());
             await guild.CreateApplicationCommandAsync(setChannelCmd.Build());
             await guild.CreateApplicationCommandAsync(setInfoChannelCmd.Build());
+            await guild.CreateApplicationCommandAsync(RollInteractionHandler.BuildCommand());
+            await guild.CreateApplicationCommandAsync(BuildEndCommand());
+            foreach (var command in await guild.GetApplicationCommandsAsync())
+                if (command.Name == "iam" && command.Type == ApplicationCommandType.Slash)
+                    await command.DeleteAsync();
+            await bingoHandler.RegisterAsync();
         }
+
+        /// <summary>Builds the slash command for ending a Standard or BossRaid round.</summary>
+        public static SlashCommandProperties BuildEndCommand() => new SlashCommandBuilder()
+            .WithDefaultMemberPermissions((GuildPermission)0)
+            .WithName("end").WithDescription("End the current Standard or BossRaid round (bot administrators only).").Build();
 
         public async Task HandleSlashCommandAsync(SocketSlashCommand command)
         {
+            if (command.GuildId != _botState.GuildId)
+            {
+                await command.RespondAsync("Use this command in the configured server.", ephemeral: true);
+                return;
+            }
+            if (command.Data.Name == "roll")
+            {
+                await rollHandler.HandleAsync(command);
+                return;
+            }
+            if (bingoHandler.Handles(command.Data.Name))
+            {
+                await bingoHandler.HandleAsync(command);
+                return;
+            }
             var user = command.User as SocketGuildUser;
             if (!IsAdmin(user))
             {
@@ -84,8 +117,42 @@ namespace RadBot.Bot
 
             switch (command.Data.Name)
             {
+                case "end":
+                    await command.DeferAsync(ephemeral: true);
+                    if (command.Channel.Id != _botState.BotChannelId)
+                    {
+                        await command.FollowupAsync("Use /end in the configured main game channel.", ephemeral: true);
+                        break;
+                    }
+                    try
+                    {
+                        var ended = await _lotteryService.EndRoundAsync();
+                        await command.FollowupAsync(ended ? "Round ended." : "No active Standard/BossRaid round. Use /bingo-admin end-event for Bingo.", ephemeral: true);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Round ending failed ({ex.GetType().Name}); no sensitive payload logged.");
+                        await command.FollowupAsync("Could not finish the round. Ask staff to check the channel configuration.", ephemeral: true);
+                    }
+                    break;
                 case "start":
-                    await _lotteryService.StartNewRoundAsync(command);
+                    try
+                    {
+                        if (!await activityGate.TryRunAsync(async () =>
+                        {
+                            if ((await bingoService.ReadAsync())?.Status == BingoEventStatus.Active)
+                                await command.RespondAsync("End the Bingo event before starting a Standard/BossRaid round.", ephemeral: true);
+                            else
+                                await _lotteryService.StartNewRoundAsync(command);
+                        }))
+                            await command.RespondAsync("Another lottery activation is in progress. Try again shortly.", ephemeral: true);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Lottery activation failed ({ex.GetType().Name}); no sensitive payload logged.");
+                        if (!command.HasResponded)
+                            await command.RespondAsync("Lottery activation is unavailable. Check storage and channel configuration.", ephemeral: true);
+                    }
                     break;
                 case "setchannel":
                     await _infrastructureService.SetChannelAsync(command);
@@ -96,31 +163,12 @@ namespace RadBot.Bot
             }
         }
 
-        public async Task HandleCommandAsync(SocketMessage message)
-        {
-            if (message.Author.IsBot) return;
-
-            var content = message.CleanContent.ToLower().Trim();
-
-            // Verification tracking — always check regardless of channel
-            if (content.StartsWith("!iam"))
-                _verificationService.TrackVerificationAttempt(message);
-
-            if (content.StartsWith('/')) return;
-            if (_botState.BotChannelId != message.Channel.Id) return;
-
-            if (LotteryService.TryParseRollCommand(content, out int min, out int max))
-                await _lotteryService.RollAsync(message, min, max);
-            else if (content == "!end" && IsAdmin(message.Author as SocketGuildUser))
-                await _lotteryService.EndRoundAsync();
-        }
-
         public async Task HandleMemberUpdatedAsync(SocketGuildUser before, SocketGuildUser after)
         {
             await _verificationService.HandleMemberUpdatedAsync(before, after);
         }
 
-        private static bool IsAdmin(SocketGuildUser? user)
-            => user?.Roles.Any(r => DiscordIds.AdminRoleIds.Contains(r.Id)) ?? false;
+        private static bool IsAdmin(SocketGuildUser? user) => BotAuthorization.IsAdmin(user);
+
     }
 }

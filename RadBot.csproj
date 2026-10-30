@@ -9,6 +9,9 @@
 
   <ItemGroup>
     <Compile Remove="publish\**" />
+    <Compile Remove="Tests\**" />
+    <EmbeddedResource Remove="Tests\**" />
+    <None Remove="Tests\**" />
     <EmbeddedResource Remove="publish\**" />
     <None Remove="publish\**" />
   </ItemGroup>
